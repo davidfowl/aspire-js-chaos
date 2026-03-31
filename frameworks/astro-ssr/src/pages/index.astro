@@ -1,17 +1,50 @@
 ---
+export const prerender = false;
 
+interface WeatherForecast {
+  date: string;
+  temperatureC: number;
+  summary: string;
+}
+
+const apiUrl = process.env.API_URL || 'http://localhost:3001';
+let weather: WeatherForecast[] = [];
+let error: string | null = null;
+
+try {
+  const res = await fetch(`${apiUrl}/api/weather`);
+  if (!res.ok) {
+    error = `API returned ${res.status}`;
+  } else {
+    weather = await res.json();
+  }
+} catch (e: any) {
+  error = `${e.message} (tried ${apiUrl}/api/weather)`;
+}
 ---
 
 <html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
+<head>
+<meta charset="utf-8" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<meta name="viewport" content="width=device-width" />
+<title>Astro SSR Weather</title>
+</head>
+<body>
+<h1>Astro SSR Weather</h1>
+{error ? (
+<p>Failed to load weather data: {error}</p>
+) : weather.length > 0 ? (
+<table>
+<thead><tr><th>Date</th><th>Temp (°C)</th><th>Summary</th></tr></thead>
+<tbody>
+{weather.map((w) => (
+<tr><td>{w.date}</td><td>{w.temperatureC}</td><td>{w.summary}</td></tr>
+))}
+</tbody>
+</table>
+) : (
+<p>No weather data available.</p>
+)}
+</body>
 </html>

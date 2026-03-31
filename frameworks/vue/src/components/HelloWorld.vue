@@ -1,10 +1,33 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import viteLogo from '../assets/vite.svg'
 import heroImg from '../assets/hero.png'
 import vueLogo from '../assets/vue.svg'
 
+interface WeatherForecast {
+  date: string;
+  temperatureC: number;
+  summary: string;
+}
+
 const count = ref(0)
+const forecasts = ref<WeatherForecast[]>([])
+const weatherLoading = ref(true)
+const weatherError = ref<string | null>(null)
+
+onMounted(async () => {
+  try {
+    const res = await fetch('/api/weather');
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+    forecasts.value = await res.json();
+  } catch (err) {
+    weatherError.value = err instanceof Error ? err.message : String(err);
+  } finally {
+    weatherLoading.value = false;
+  }
+})
 </script>
 
 <template>
@@ -19,6 +42,24 @@ const count = ref(0)
       <p>Edit <code>src/App.vue</code> and save to test <code>HMR</code></p>
     </div>
     <button class="counter" @click="count++">Count is {{ count }}</button>
+  </section>
+
+  <div class="ticks"></div>
+
+  <section id="weather">
+    <h2>Weather Forecast</h2>
+    <p v-if="weatherLoading">Loading...</p>
+    <p v-else-if="weatherError" style="color: red;">Failed to load weather data: {{ weatherError }}</p>
+    <table v-else>
+      <thead>
+        <tr><th>Date</th><th>Temperature (°C)</th><th>Summary</th></tr>
+      </thead>
+      <tbody>
+        <tr v-for="(f, i) in forecasts" :key="i">
+          <td>{{ f.date }}</td><td>{{ f.temperatureC }}</td><td>{{ f.summary }}</td>
+        </tr>
+      </tbody>
+    </table>
   </section>
 
   <div class="ticks"></div>

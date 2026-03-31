@@ -4,6 +4,12 @@ import viteLogo from './assets/vite.svg'
 import heroImg from './assets/hero.png'
 import { setupCounter } from './counter.ts'
 
+interface WeatherForecast {
+  date: string;
+  temperatureC: number;
+  summary: string;
+}
+
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <section id="center">
   <div class="hero">
@@ -16,6 +22,13 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     <p>Edit <code>src/main.ts</code> and save to test <code>HMR</code></p>
   </div>
   <button id="counter" type="button" class="counter"></button>
+</section>
+
+<div class="ticks"></div>
+
+<section id="weather">
+  <h2>Weather Forecast</h2>
+  <div id="weather-content">Loading...</div>
 </section>
 
 <div class="ticks"></div>
@@ -58,3 +71,28 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 `
 
 setupCounter(document.querySelector<HTMLButtonElement>('#counter')!)
+
+async function loadWeather() {
+  const container = document.querySelector<HTMLDivElement>('#weather-content')!;
+  try {
+    const response = await fetch('/api/weather');
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    const data: WeatherForecast[] = await response.json();
+    container.innerHTML = `
+      <table>
+        <thead>
+          <tr><th>Date</th><th>Temperature (°C)</th><th>Summary</th></tr>
+        </thead>
+        <tbody>
+          ${data.map(f => `<tr><td>${f.date}</td><td>${f.temperatureC}</td><td>${f.summary}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (err) {
+    container.innerHTML = `<p style="color: red;">Failed to load weather data: ${err instanceof Error ? err.message : err}</p>`;
+  }
+}
+
+loadWeather();

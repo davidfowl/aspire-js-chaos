@@ -1,8 +1,54 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import reactLogo from './assets/react.svg'
 import viteLogo from './assets/vite.svg'
 import heroImg from './assets/hero.png'
 import './App.css'
+
+interface WeatherForecast {
+  date: string;
+  temperatureC: number;
+  summary: string;
+}
+
+function WeatherTable() {
+  const [forecasts, setForecasts] = useState<WeatherForecast[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/weather')
+      .then(res => {
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+        return res.json();
+      })
+      .then((data: WeatherForecast[]) => {
+        setForecasts(data);
+        setLoading(false);
+      })
+      .catch(err => {
+        setError(err instanceof Error ? err.message : String(err));
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) return <p>Loading...</p>;
+  if (error) return <p style={{ color: 'red' }}>Failed to load weather data: {error}</p>;
+
+  return (
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Temperature (°C)</th><th>Summary</th></tr>
+      </thead>
+      <tbody>
+        {forecasts.map((f, i) => (
+          <tr key={i}><td>{f.date}</td><td>{f.temperatureC}</td><td>{f.summary}</td></tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
 
 function App() {
   const [count, setCount] = useState(0)
@@ -27,6 +73,13 @@ function App() {
         >
           Count is {count}
         </button>
+      </section>
+
+      <div className="ticks"></div>
+
+      <section id="weather">
+        <h2>Weather Forecast</h2>
+        <WeatherTable />
       </section>
 
       <div className="ticks"></div>
