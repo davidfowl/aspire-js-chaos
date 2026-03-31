@@ -1,86 +1,112 @@
-# Aspire JS chaos
+# Aspire JS Framework Chaos — Deployment Investigation
 
-This repo is a proof-of-concept for publishing a mixed set of JavaScript frameworks from an Aspire TypeScript AppHost.
+A sample repo proving that Aspire can deploy 9 different JavaScript frameworks using their **officially recommended** production runtime paths.
 
-The core conclusion is that JavaScript publish does not fit a single deployment model. The sample proves two workable paths:
+## Conclusion: Three Deployment Buckets
 
-* A static website path for frameworks that emit static assets.
-* A generic Node runtime path for frameworks that need a server process.
+After reviewing each framework's official deployment docs and samples, JavaScript frameworks fall into three clear categories:
 
-## Conclusions
+### 1. Static Website (Caddy)
+Frameworks that build to a `dist/` folder of static files. No Node.js needed at runtime.
 
-The following frameworks worked with a static website runtime backed by a generated Dockerfile and Caddy:
+| Framework | Build Command | Output | Docs |
+|-----------|--------------|--------|------|
+| **Vite** | `vite build` | `dist/` | [vite.dev/guide/static-deploy](https://vite.dev/guide/static-deploy.html) |
+| **React** | `vite build` | `dist/` | Vite-based |
+| **Vue** | `vite build` | `dist/` | Vite-based |
+| **Astro** | `astro build` | `dist/` | [docs.astro.build/en/guides/deploy](https://docs.astro.build/en/guides/deploy/) |
 
-* Vite
-* React
-* Vue
-* Astro
+> **Important**: Both Vite and Astro docs explicitly state that `vite preview` / `astro preview` are **not production servers**.
 
-The following frameworks worked with a generic Node runtime Dockerfile generated with `WithDockerfileBuilder`:
+### 2. Node Built Artifact (direct `node` entrypoint)
+Frameworks that produce a standalone server artifact during build. No npm/package-manager needed at runtime.
 
-* Next.js
-* Nuxt
-* SvelteKit
-* TanStack Start
-* Remix
+| Framework | Build Output | Runtime Command | Official Reference |
+|-----------|-------------|-----------------|-------------------|
+| **Next.js** | `.next/standalone/` + `.next/static/` + `public/` | `node server.js` | [with-docker example](https://github.com/vercel/next.js/tree/canary/examples/with-docker) |
+| **Nuxt** | `.output/` | `node .output/server/index.mjs` | [nuxt.com/docs/getting-started/deployment](https://nuxt.com/docs/getting-started/deployment) |
+| **SvelteKit** | `build/` | `node build/index.js` | [svelte.dev/docs/kit/adapter-node](https://svelte.dev/docs/kit/adapter-node) |
+| **TanStack Start** | `.output/` (Nitro) | `node .output/server/index.mjs` | [nitro.build/deploy/runtimes/node](https://nitro.build/deploy/runtimes/node) |
 
-This points to a product direction with two built-in publish paths:
+> **Key insight**: Next.js requires `output: "standalone"` in `next.config.ts`. SvelteKit requires `@sveltejs/adapter-node` instead of `adapter-auto`.
 
-1. `PublishAsStaticWebsite(...)` for true static output.
-2. A generic Node-based publish path for frameworks that require `start` or `preview`.
+### 3. npm Script at Runtime
+Frameworks where the server binary lives in `node_modules` and must be invoked via npm.
 
-Framework-specific Dockerfiles do not appear to be required for the current sample set, although the generic Node path still needs framework-specific run commands and arguments.
+| Framework | Runtime Command | Why npm? | Official Reference |
+|-----------|----------------|----------|-------------------|
+| **Remix** | `npm run start` → `react-router-serve ./build/server/index.js` | `react-router-serve` is an npm dependency, not a built artifact | [node-custom-server Dockerfile](https://github.com/remix-run/react-router-templates/tree/main/node-custom-server) |
 
-## Verified runtime mapping
+## Framework-Specific Setup Requirements
 
-The current sample uses these publish modes:
+### Next.js
+- **Config**: Set `output: "standalone"` in `next.config.ts`
+- **Dockerfile shape**: Copy `.next/standalone`, `.next/static`, and `public` into runtime image
+- **Runtime**: `node server.js` (no npm needed)
+- **Env**: `HOSTNAME=0.0.0.0` for container binding
 
-| Framework | Publish mode | Runtime command |
-| --- | --- | --- |
-| Vite | Static website | Caddy serving built assets |
-| React | Static website | Caddy serving built assets |
-| Vue | Static website | Caddy serving built assets |
-| Astro | Static website | Caddy serving built assets |
-| Next.js | Generic Node runtime | `npm run start -- --hostname 0.0.0.0 --port "$PORT"` |
-| Nuxt | Generic Node runtime | `npm run preview -- --port "$PORT"` |
-| SvelteKit | Generic Node runtime | `npm run preview -- --host 0.0.0.0 --port "$PORT"` |
-| TanStack Start | Generic Node runtime | `npm run preview -- --host 0.0.0.0 --port "$PORT"` |
-| Remix | Generic Node runtime | `npm run start -- --port "$PORT"` |
+### Nuxt
+- **Config**: Optionally set `nitro.preset: 'node-server'` in `nuxt.config.ts`
+- **Dockerfile shape**: Copy `.output/` into runtime image
+- **Runtime**: `node .output/server/index.mjs`
+- **Env**: Respects `PORT` and `HOST` env vars
 
-## Important implementation notes
+### SvelteKit
+- **Config**: Install `@sveltejs/adapter-node` and update `svelte.config.js`
+- **Dockerfile shape**: Copy `build/` into runtime image
+- **Runtime**: `node build/index.js`
+- **Env**: Respects `PORT` and `HOST` env vars
 
-A few details were required to make the proof-of-concept work reliably:
+### TanStack Start
+- **Config**: Uses Nitro under the hood, no special config needed
+- **Dockerfile shape**: Copy `.output/` into runtime image
+- **Runtime**: `node .output/server/index.mjs`
+- **Env**: Respects `PORT` and `HOST` env vars
 
-* Docker build contexts must exclude `node_modules` and build output. Each framework sample includes a `.dockerignore`.
-* Preview-based runtimes needed an external HTTP endpoint to make Docker Compose publish host-visible URLs.
-* The Vite preview-based runtimes in this sample are run as `root` in the container so Vite can write temporary config files during startup.
-* Static apps were verified both internally and through exposed Compose endpoints.
-* Node-backed apps were verified through exposed Compose endpoints after `aspire deploy`.
+### Remix / React Router
+- **Config**: Default scaffold works
+- **Dockerfile shape**: Copy `build/`, `package.json`, `node_modules` (prod-only) into runtime image
+- **Runtime**: `npm run start` (which runs `react-router-serve ./build/server/index.js`)
+- **Env**: Pass `--port "$PORT"` via run script arguments
 
-## AppHost shape
+## Important Implementation Notes
 
-The AppHost currently chooses a publish mode per framework in `apphost.ts`:
+### `.dockerignore`
+Each framework directory has a `.dockerignore` to exclude `node_modules` and build artifacts from Docker context. Without this, Docker builds fail with disk exhaustion errors.
 
-* Static frameworks use `publishAsStaticWebsite()`
-* Server frameworks use `withNodeRuntimeDockerPublish(...)`
-* All published apps use `withExternalHttpEndpoints()`
+### External Endpoints
+All frameworks use `.withExternalHttpEndpoints()` in the AppHost so that `aspire deploy` exposes host-visible URLs.
 
-## Running the sample
+### No `vite preview` in Production
+Our earlier POC used `npm run preview` for Nuxt, SvelteKit, and TanStack Start. This is **wrong** — those are dev/preview servers, not production servers. The updated sample uses the framework-recommended built artifacts directly.
 
-Install dependencies:
+### User Permissions
+With direct Node artifact entrypoints, containers run as `USER node` (non-root). The earlier POC needed `USER root` because `vite preview` writes temp files to `node_modules/.vite-temp`. That problem goes away when you use the correct production runtime.
+
+## How to Run
 
 ```bash
-npm install
-```
+# Start in dev mode
+aspire run
 
-Deploy to local Docker Compose with Aspire:
-
-```bash
+# Deploy to Docker Compose
 aspire deploy
 ```
 
-The deploy output will print the localhost URL for each framework.
+## AppHost Structure
 
-## Why this repo exists
+The `apphost.ts` uses three helper methods matching the three deployment buckets:
 
-This repo exists to capture the practical findings behind JavaScript publishing in Aspire before porting the proven behavior into the product codebase and issue discussion.
+```typescript
+// Static frameworks
+app.publishAsStaticWebsite()
+
+// Built Node artifact (no npm at runtime)
+app.publishAsNodeServer('.output/server/index.mjs', { outputPath: '.output' })
+
+// Next.js standalone (special copy shape)
+app.publishAsNextStandalone()
+
+// npm script at runtime (Remix)
+app.publishAsNpmScript({ startScriptName: 'start', runScriptArguments: '-- --port "$PORT"' })
+```
