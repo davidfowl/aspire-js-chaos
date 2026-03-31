@@ -126,7 +126,7 @@ Use `PublishAsNodeServer` for frameworks that produce a self-contained Node.js s
 
 This is the right choice for:
 
-- **Nuxt** — builds to `.output/server/index.mjs` via [Nitro](https://nitro.build/deploy/runtimes/node)
+
 - **SvelteKit** with [`adapter-node`](https://svelte.dev/docs/kit/adapter-node) — builds to `build/index.js`
 - **TanStack Start** — builds to `.output/server/index.mjs` via Nitro
 - **Next.js** with [`output: "standalone"`](https://nextjs.org/docs/app/api-reference/config/next-config-js/output) — builds to `.next/standalone/server.js`
@@ -136,10 +136,9 @@ This is the right choice for:
 The `entryPoint` parameter specifies the path to the Node.js entry point relative to the app directory. The optional `outputPath` parameter specifies which directory to copy into the runtime image.
 
 ```csharp
-// Nuxt
-builder.AddViteApp("nuxt-app", "./nuxt-app")
-    .PublishAsNodeServer(
-        entryPoint: ".output/server/index.mjs",
+// Nuxt (needs node_modules — see PublishAsNpmScript)
+// builder.AddViteApp("nuxt-app", "./nuxt-app")
+//     .PublishAsNpmScript(startScriptName: "start");
         outputPath: ".output");
 
 // SvelteKit (requires @sveltejs/adapter-node)
@@ -185,7 +184,6 @@ Some frameworks require configuration changes before `PublishAsNodeServer` will 
 
 | Framework | Required configuration |
 |-----------|----------------------|
-| **Nuxt** | None — `node-server` is the default Nitro preset |
 | **SvelteKit** | Install `@sveltejs/adapter-node` and update `svelte.config.js` |
 | **TanStack Start** | None — uses Nitro with `node-server` preset by default |
 | **Next.js** | Set `output: "standalone"` in `next.config.ts` |
@@ -199,6 +197,7 @@ Use `PublishAsNpmScript` for frameworks where the production server depends on p
 
 This is the right choice for:
 
+- **Nuxt** — `useAsyncData`/`useFetch` needs the full Nitro environment with `node_modules` at runtime. Hello-world works standalone, but server-side data fetching breaks without it. See the [Nuxt deployment docs](https://nuxt.com/docs/getting-started/deployment).
 - **Remix / React Router** — the `react-router-serve` binary lives in `node_modules`. See the [official Dockerfile](https://github.com/remix-run/react-router-templates/tree/main/node-custom-server).
 - **Astro SSR** with [`@astrojs/node`](https://docs.astro.build/en/guides/integrations-guide/node/) — the built `entry.mjs` imports unbundled `@astrojs/*` packages. See the [official Docker recipe](https://docs.astro.build/en/recipes/docker/).
 
@@ -251,7 +250,7 @@ builder
 |-----------|-------------|--------|-------------|
 | Vite / React / Vue | Static | `PublishAsStaticWebsite` | N/A (Caddy) |
 | Astro (default) | Static | `PublishAsStaticWebsite` | N/A (Caddy) |
-| Nuxt | Server | `PublishAsNodeServer` | `.output/server/index.mjs` |
+| Nuxt | Server | `PublishAsNpmScript` | `node .output/server/index.mjs` |
 | SvelteKit | Server | `PublishAsNodeServer` | `build/index.js` |
 | TanStack Start | Server | `PublishAsNodeServer` | `.output/server/index.mjs` |
 | Next.js (standalone) | Server | `PublishAsNodeServer` | `server.js` |
