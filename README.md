@@ -103,6 +103,9 @@ The `apphost.ts` uses helper methods matching the three deployment buckets:
 // Static frameworks (Caddy)
 app.publishAsStaticWebsite()
 
+// Static site with API proxy — no CORS, no URL discovery problem
+app.publishAsStaticWebsite({ apiPath: '/api', apiTarget: await api.getEndpoint('http') })
+
 // Built Node artifact — self-contained, no npm at runtime
 app.publishAsNodeServer('.output/server/index.mjs', { outputPath: '.output' })
 
@@ -111,4 +114,31 @@ app.publishAsNextStandalone()
 
 // Needs node_modules at runtime (Astro SSR, Remix)
 app.publishAsNpmScript({ startScriptName: 'start' })
+```
+
+### Static sites and API backends
+
+Most SPAs are static files that call one backend API. `publishAsStaticWebsite` supports this directly with an optional API proxy:
+
+```typescript
+const api = builder.addNodeApp('api', './api', 'server.js')
+    .withHttpEndpoint({ port: 3001, env: 'PORT' });
+
+const frontend = builder.addViteApp('frontend', './frontend')
+    .publishAsStaticWebsite({ apiPath: '/api', apiTarget: await api.getEndpoint('http') })
+    .withExternalHttpEndpoints();
+```
+
+At deploy time, Caddy adds a `reverse_proxy` rule for `/api/*` to the backend — the browser calls `/api/...` on the same origin, so there's no CORS and no need to bake the backend URL at build time.
+
+For anything more complex (multiple backends, path transforms, auth/BFF), use YARP with `PublishWithStaticFiles`.
+
+### SPA fallback
+
+`publishAsStaticWebsite` enables SPA fallback by default (`spaFallback: true`), which rewrites unknown routes to `/index.html`. This is what React, Vue, and Angular SPAs need for client-side routing — without it, refreshing on `/dashboard` returns a 404.
+
+For multi-page static sites like Astro (static mode), disable it:
+
+```typescript
+app.publishAsStaticWebsite({ spaFallback: false })
 ```
