@@ -108,3 +108,5 @@ app.publishAsNpmScript({ startScriptName: 'start' })
 ```
 
 The `publishAsNextStandalone()` helper is a convenience for Next.js's unique copy shape (`.next/standalone` + `.next/static` + `public`), but conceptually it's the same as `publishAsNodeServer`.
+
+For full documentation — including framework-specific gotchas, generated Dockerfile shapes, the decision tree for choosing a method, and how these relate to Aspire's existing deployment models — see **[docs/publishing-javascript-apps.md](docs/publishing-javascript-apps.md)**.
