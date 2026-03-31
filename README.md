@@ -1,10 +1,10 @@
 # Aspire JS Framework Chaos — Deployment Investigation
 
-A sample repo proving that Aspire can deploy 9 different JavaScript frameworks using their **officially recommended** production runtime paths.
+A sample repo proving that Aspire can deploy 10 JavaScript framework configurations using their **officially recommended** production runtime paths.
 
 ## Conclusion: Three Deployment Buckets
 
-After reviewing each framework's official deployment docs and samples, JavaScript frameworks fall into three clear categories:
+After reviewing each framework's official deployment docs, GitHub samples, and Dockerfiles, JavaScript frameworks fall into three clear categories:
 
 ### 1. Static Website (Caddy)
 Frameworks that build to a `dist/` folder of static files. No Node.js needed at runtime.
@@ -14,47 +14,59 @@ Frameworks that build to a `dist/` folder of static files. No Node.js needed at 
 | **Vite** | `vite build` | `dist/` | [Deploying a Static Site](https://vite.dev/guide/static-deploy.html) · [`vite preview` is not a production server](https://vite.dev/guide/cli.html#vite-preview) |
 | **React** | `vite build` | `dist/` | Vite-based — same as above |
 | **Vue** | `vite build` | `dist/` | Vite-based — same as above |
-| **Astro** | `astro build` | `dist/` | [Deploy your Astro Site](https://docs.astro.build/en/guides/deploy/) · [Output configuration](https://docs.astro.build/en/reference/configuration-reference/#output) · [`astro preview` is not for production](https://docs.astro.build/en/reference/cli-reference/#astro-preview) |
+| **Astro** (static) | `astro build` | `dist/` | [Deploy your Astro Site](https://docs.astro.build/en/guides/deploy/) · [Output config](https://docs.astro.build/en/reference/configuration-reference/#output) · [`astro preview` is not for production](https://docs.astro.build/en/reference/cli-reference/#astro-preview) |
 
-### 2. Node Built Artifact (direct `node` entrypoint)
-Frameworks that produce a standalone server artifact during build. No npm/package-manager needed at runtime.
+### 2. Node Built Artifact (direct `node` entrypoint, no npm at runtime)
+Frameworks that produce a self-contained server artifact during build. The runtime image only needs the built output — no `node_modules`, no package manager.
 
 #### Next.js (standalone output)
-- **Output layout**: `.next/standalone/` (self-contained server), `.next/static/` (client assets), `public/` (static files)
+- **Output layout**: `.next/standalone/` (self-contained server + bundled deps), `.next/static/` (client assets), `public/` (static files)
 - **Runtime**: `node server.js`
 - **Config required**: `output: "standalone"` in `next.config.ts`
-- **Docs**: [Deploying — Self-Hosting](https://nextjs.org/docs/app/building-your-application/deploying) · [Self-Hosting Guide](https://nextjs.org/docs/app/guides/self-hosting) · [`output: "standalone"` reference](https://nextjs.org/docs/app/api-reference/config/next-config-js/output)
-- **Sample**: [`vercel/next.js/examples/with-docker`](https://github.com/vercel/next.js/tree/canary/examples/with-docker) — uses `CMD ["node", "server.js"]`, not npm
+- **Docs**: [Deploying](https://nextjs.org/docs/app/building-your-application/deploying) · [Self-Hosting Guide](https://nextjs.org/docs/app/guides/self-hosting) · [`output: "standalone"` reference](https://nextjs.org/docs/app/api-reference/config/next-config-js/output)
+- **Sample Dockerfile**: [`vercel/next.js/examples/with-docker`](https://github.com/vercel/next.js/tree/canary/examples/with-docker) — runtime stage uses `CMD ["node", "server.js"]`, copies only standalone + static + public, no npm
 
 #### Nuxt (Nitro node-server preset)
-- **Output layout**: `.output/server/index.mjs` (server entry), `.output/public/` (client assets)
+- **Output layout**: `.output/server/index.mjs` (self-contained server), `.output/public/` (client assets)
 - **Runtime**: `node .output/server/index.mjs`
 - **Config**: Optionally set `nitro.preset: 'node-server'` in `nuxt.config.ts` (it's the default)
 - **Docs**: [Nuxt Deployment — Node.js Server](https://nuxt.com/docs/getting-started/deployment#nodejs-server) · [Nitro Node Server Preset](https://nitro.build/deploy/runtimes/node)
-- **Env vars**: `PORT` (default 3000), `HOST` (default 0.0.0.0), `NITRO_PORT`, `NITRO_HOST`
+- **Env vars**: `PORT` (default 3000), `HOST` (default 0.0.0.0)
 
 #### SvelteKit (adapter-node)
 - **Output layout**: `build/` directory with `build/index.js` as entry point
 - **Runtime**: `node build` or `node build/index.js`
 - **Config required**: Install `@sveltejs/adapter-node` and update `svelte.config.js`
-- **Docs**: [SvelteKit adapter-node](https://svelte.dev/docs/kit/adapter-node) · [Adapters overview](https://svelte.dev/docs/kit/adapters) · [`vite preview` is not a production server](https://vite.dev/guide/cli.html#vite-preview)
-- **Env vars**: `PORT`, `HOST`, `ORIGIN`, `PROTOCOL_HEADER`, `HOST_HEADER`
+- **Docs**: [SvelteKit adapter-node](https://svelte.dev/docs/kit/adapter-node) · [Adapters overview](https://svelte.dev/docs/kit/adapters)
+- **Env vars**: `PORT`, `HOST`, `ORIGIN`
 
 #### TanStack Start (Nitro)
-- **Output layout**: `.output/server/index.mjs` (server entry), `.output/public/` (client assets) — same as Nuxt (both use Nitro)
+- **Output layout**: `.output/server/index.mjs` (self-contained server), `.output/public/` (client assets) — same shape as Nuxt (both use Nitro)
 - **Runtime**: `node .output/server/index.mjs`
 - **Docs**: [TanStack Start Deployment](https://tanstack.com/start/latest/docs/framework/react/deployment) · [Nitro Node Server Preset](https://nitro.build/deploy/runtimes/node)
-- **Note**: Docs are provider/preset-oriented; the Nitro node-server preset is the generic self-hosting path
 
-### 3. npm Script at Runtime
-Frameworks where the server binary lives in `node_modules` and must be invoked via npm.
+### 3. Node with Runtime Dependencies (needs `node_modules` at runtime)
+Frameworks where the built server entry point imports unbundled packages from `node_modules` at runtime. The runtime image must include production dependencies.
+
+#### Astro SSR (node adapter, standalone mode)
+- **Output layout**: `dist/server/entry.mjs` (server entry), `dist/client/` (client assets)
+- **Runtime**: `node ./dist/server/entry.mjs`
+- **Why node_modules?**: The built `entry.mjs` imports from unbundled packages like `@astrojs/internal-helpers` at runtime. This is confirmed by Astro's official multi-stage Docker example which copies `node_modules` into the runtime image.
+- **Config required**: Install `@astrojs/node` adapter, set `mode: 'standalone'`
+- **Docs**: [Astro Node adapter](https://docs.astro.build/en/guides/integrations-guide/node/) · [Astro Docker recipe](https://docs.astro.build/en/recipes/docker/)
+- **Sample Dockerfile**: From the [Astro Docker docs](https://docs.astro.build/en/recipes/docker/#multi-stage-build-using-ssr):
+  ```dockerfile
+  COPY --from=prod-deps /app/node_modules ./node_modules
+  COPY --from=build /app/dist ./dist
+  CMD ["node", "./dist/server/entry.mjs"]
+  ```
 
 #### Remix / React Router
 - **Output layout**: `build/server/index.js` (server), `build/client/` (client assets)
 - **Runtime**: `npm run start` → `react-router-serve ./build/server/index.js`
-- **Why npm?**: `react-router-serve` is an npm package in `node_modules`, not a standalone binary
+- **Why node_modules?**: `react-router-serve` is an npm package in `node_modules`, not a standalone binary
 - **Docs**: [React Router Deploying](https://reactrouter.com/start/framework/deploying)
-- **Samples**: [`remix-run/react-router-templates/node-custom-server`](https://github.com/remix-run/react-router-templates/tree/main/node-custom-server) — Dockerfile uses `CMD ["npm", "run", "start"]` · [`remix-run/react-router-templates/default`](https://github.com/remix-run/react-router-templates/tree/main/default)
+- **Sample Dockerfile**: [`remix-run/react-router-templates/node-custom-server`](https://github.com/remix-run/react-router-templates/tree/main/node-custom-server) — runtime stage uses `CMD ["npm", "run", "start"]`, copies `node_modules` (prod-only) + `build/`
 
 ## Important Implementation Notes
 
@@ -68,7 +80,10 @@ All frameworks use `.withExternalHttpEndpoints()` in the AppHost so that `aspire
 Our earlier POC used `npm run preview` for Nuxt, SvelteKit, and TanStack Start. This is **wrong** — those are dev/preview servers, not production servers. The updated sample uses the framework-recommended built artifacts directly.
 
 ### User Permissions
-With direct Node artifact entrypoints, containers run as `USER node` (non-root). The earlier POC needed `USER root` because `vite preview` writes temp files to `node_modules/.vite-temp`. That problem goes away when you use the correct production runtime.
+With direct Node artifact entrypoints (bucket 2), containers run as `USER node` (non-root). Frameworks in bucket 3 that use `npm run` currently run as root because npm may need write access. The earlier POC needed `USER root` for `vite preview` because it writes temp files to `node_modules/.vite-temp` — that problem goes away with the correct production runtime.
+
+### Astro: Two Modes
+Astro appears in both bucket 1 (static, default) and bucket 3 (SSR with node adapter). The mode depends on whether the user adds `@astrojs/node` and configures server-side rendering. This sample includes both variants.
 
 ## How to Run
 
@@ -85,15 +100,15 @@ aspire deploy
 The `apphost.ts` uses helper methods matching the three deployment buckets:
 
 ```typescript
-// Static frameworks
+// Static frameworks (Caddy)
 app.publishAsStaticWebsite()
 
-// Built Node artifact (no npm at runtime)
+// Built Node artifact — self-contained, no npm at runtime
 app.publishAsNodeServer('.output/server/index.mjs', { outputPath: '.output' })
 
-// Next.js standalone (special copy shape for .next/standalone + .next/static + public)
+// Next.js standalone — special copy shape for .next/standalone + .next/static + public
 app.publishAsNextStandalone()
 
-// npm script at runtime (Remix — react-router-serve is in node_modules)
-app.publishAsNpmScript({ startScriptName: 'start', runScriptArguments: '-- --port "$PORT"' })
+// Needs node_modules at runtime (Astro SSR, Remix)
+app.publishAsNpmScript({ startScriptName: 'start' })
 ```
