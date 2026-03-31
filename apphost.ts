@@ -4,24 +4,40 @@ import { createBuilder } from './.modules/aspire.js';
 const builder = await createBuilder();
 await builder.addDockerComposeEnvironment('compose');
 
-// --- Static frameworks: build to dist/, serve with Caddy ---
+// --- Simple API backend for testing the proxy ---
+const api = builder.addNodeApp('api', './frameworks/api', 'server.js')
+  .withHttpEndpoint({ port: 3001, env: 'PORT' })
+  .withExternalHttpEndpoints();
+
+await api.publishAsDockerComposeService(async (_r, s) => { await s.name.set('api'); });
+
+// --- Static frameworks ---
+
+// Vite with API proxy: /api/* proxied to the backend via Caddy
+{
+  const app = builder.addViteApp('vite', './frameworks/vite', { runScriptName: 'dev' })
+    .withEnvironment('FRAMEWORK', 'Vite')
+    .publishAsStaticWebsite({ apiPath: '/api', apiTarget: await api.getEndpoint('http') })
+    .withExternalHttpEndpoints();
+  await app.publishAsDockerComposeService(async (_r, s) => { await s.name.set('vite'); });
+}
+
+// React, Vue, Astro — plain static, no proxy
 for (const fw of [
-  { name: 'vite', display: 'Vite', path: './frameworks/vite' },
   { name: 'react', display: 'React', path: './frameworks/react' },
   { name: 'vue', display: 'Vue', path: './frameworks/vue' },
   { name: 'astro', display: 'Astro (static)', path: './frameworks/astro' },
 ]) {
-  const app = builder
-    .addViteApp(fw.name, fw.path, { runScriptName: 'dev' })
+  const app = builder.addViteApp(fw.name, fw.path, { runScriptName: 'dev' })
     .withEnvironment('FRAMEWORK', fw.display)
     .publishAsStaticWebsite()
     .withExternalHttpEndpoints();
   await app.publishAsDockerComposeService(async (_r, s) => { await s.name.set(fw.name); });
 }
 
-// --- Node server frameworks: direct built artifact, no npm at runtime ---
+// --- Node server frameworks ---
 
-// Nuxt: https://nuxt.com/docs/getting-started/deployment
+// Nuxt
 {
   const app = builder.addViteApp('nuxt', './frameworks/nuxt', { runScriptName: 'dev' })
     .withEnvironment('FRAMEWORK', 'Nuxt')
@@ -30,7 +46,7 @@ for (const fw of [
   await app.publishAsDockerComposeService(async (_r, s) => { await s.name.set('nuxt'); });
 }
 
-// SvelteKit (adapter-node): https://svelte.dev/docs/kit/adapter-node
+// SvelteKit
 {
   const app = builder.addViteApp('sveltekit', './frameworks/sveltekit', { runScriptName: 'dev' })
     .withEnvironment('FRAMEWORK', 'SvelteKit')
@@ -39,7 +55,7 @@ for (const fw of [
   await app.publishAsDockerComposeService(async (_r, s) => { await s.name.set('sveltekit'); });
 }
 
-// TanStack Start (Nitro): https://tanstack.com/start/latest/docs/framework/react/deployment
+// TanStack Start
 {
   const app = builder.addViteApp('tanstack-start', './frameworks/tanstack-start', { runScriptName: 'dev' })
     .withEnvironment('FRAMEWORK', 'TanStack Start')
@@ -48,7 +64,7 @@ for (const fw of [
   await app.publishAsDockerComposeService(async (_r, s) => { await s.name.set('tanstack-start'); });
 }
 
-// Next.js standalone: https://github.com/vercel/next.js/tree/canary/examples/with-docker
+// Next.js standalone
 {
   const app = builder.addViteApp('nextjs', './frameworks/nextjs', { runScriptName: 'dev' })
     .withEnvironment('FRAMEWORK', 'Next.js')
@@ -57,10 +73,9 @@ for (const fw of [
   await app.publishAsDockerComposeService(async (_r, s) => { await s.name.set('nextjs'); });
 }
 
-// --- Frameworks that need node_modules at runtime ---
+// --- Frameworks needing node_modules at runtime ---
 
-// Astro SSR (node adapter, standalone): entry.mjs imports from @astrojs/internal-helpers at runtime
-// https://docs.astro.build/en/guides/integrations-guide/node/
+// Astro SSR
 {
   const app = builder.addViteApp('astro-ssr', './frameworks/astro-ssr', { runScriptName: 'dev' })
     .withEnvironment('FRAMEWORK', 'Astro SSR')
@@ -69,8 +84,7 @@ for (const fw of [
   await app.publishAsDockerComposeService(async (_r, s) => { await s.name.set('astro-ssr'); });
 }
 
-// Remix: react-router-serve lives in node_modules
-// https://github.com/remix-run/react-router-templates/tree/main/node-custom-server
+// Remix
 {
   const app = builder.addViteApp('remix', './frameworks/remix', { runScriptName: 'dev' })
     .withEnvironment('FRAMEWORK', 'Remix')
