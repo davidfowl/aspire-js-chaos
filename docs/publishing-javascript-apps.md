@@ -1,11 +1,11 @@
 ---
 title: Publish JavaScript apps
-description: Learn how to publish JavaScript applications with .NET Aspire, including static websites, Node.js server applications, and framework-specific deployment patterns.
+description: Learn how to publish JavaScript applications with Aspire, including static websites, Node.js server applications, and framework-specific deployment patterns.
 ---
 
 # Publish JavaScript apps
 
-When you publish a JavaScript application with .NET Aspire, the framework generates a production-ready container image. The shape of that container depends on how your framework produces its build output. There is no single "generic JavaScript runtime" — instead, you choose the publish method that matches your framework's recommended deployment model.
+When you publish a JavaScript application with Aspire, the framework generates a production-ready container image. The shape of that container depends on how your framework produces its build output. There is no single "generic JavaScript runtime" — instead, you choose the publish method that matches your framework's recommended deployment model.
 
 ## Publish methods
 
@@ -239,7 +239,7 @@ Use this decision tree to pick the correct publish method:
 
 ## See also
 
-- [Build .NET Aspire apps with Node.js](/get-started/build-aspire-apps-with-nodejs)
+- [Build Aspire apps with Node.js](/get-started/build-aspire-apps-with-nodejs)
 - [Vite static deploy guide](https://vite.dev/guide/static-deploy.html)
 - [Nuxt deployment docs](https://nuxt.com/docs/getting-started/deployment)
 - [SvelteKit adapter-node](https://svelte.dev/docs/kit/adapter-node)
