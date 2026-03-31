@@ -1,0 +1,13 @@
+node_modules/
+dist/
+docker-compose-artifacts/
+*.log
+.framework
+.astro/
+.next/
+.nuxt/
+.output/
+.svelte-kit/
+build/
+.env
+.env.*
