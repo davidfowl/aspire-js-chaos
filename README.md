@@ -56,11 +56,11 @@ Our initial categorization based on scaffold apps was wrong. Nuxt appeared to wo
 Most SPAs call one backend API. `publishAsStaticWebsite` solves this with an optional Caddy reverse proxy:
 
 ```typescript
-const api = builder.addNodeApp('api', './api', 'server.js')
+const api = await builder.addNodeApp('api', './api', 'server.js')
     .withHttpEndpoint({ port: 3001, env: 'PORT' });
 
-const frontend = builder.addViteApp('frontend', './frontend')
-    .publishAsStaticWebsite({ apiPath: '/api', apiTarget: await api.getEndpoint('http') })
+await builder.addViteApp('frontend', './frontend')
+    .publishAsStaticWebsite({ apiPath: '/api', apiTarget: api })
     .withExternalHttpEndpoints();
 ```
 
@@ -97,14 +97,14 @@ Three methods, no special cases needed:
 
 ```typescript
 // Static files + optional API proxy
-app.publishAsStaticWebsite()
-app.publishAsStaticWebsite({ apiPath: '/api', apiTarget: await api.getEndpoint('http') })
+await app.publishAsStaticWebsite()
+await app.publishAsStaticWebsite({ apiPath: '/api', apiTarget: api })
 
 // Self-contained Node server artifact
-app.publishAsNodeServer('.output/server/index.mjs', { outputPath: '.output' })
+await app.publishAsNodeServer('.output/server/index.mjs', { outputPath: '.output' })
 
 // Needs node_modules at runtime
-app.publishAsNpmScript({ startScriptName: 'start' })
+await app.publishAsNpmScript({ startScriptName: 'start' })
 ```
 
 The `publishAsNextStandalone()` helper is a convenience for Next.js's unique copy shape (`.next/standalone` + `.next/static` + `public`), but conceptually it's the same as `publishAsNodeServer`.

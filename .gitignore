@@ -12,5 +12,4 @@ build/
 .env
 .env.*
 .modules/
-SampleExtensions/bin/
-SampleExtensions/obj/
+.playwright-cli/
