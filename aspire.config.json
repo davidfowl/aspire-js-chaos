@@ -18,7 +18,6 @@
   },
   "packages": {
     "Aspire.Hosting.JavaScript": "13.2.0",
-    "Aspire.Hosting.Docker": "13.2.0",
-    "JsRuntimeSampleExtensions": "./SampleExtensions/JsRuntimeSampleExtensions.csproj"
+    "Aspire.Hosting.Docker": "13.2.0"
   }
 }
