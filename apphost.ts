@@ -42,6 +42,13 @@ const apiEndpoint = await api.getEndpoint('http');
     .withExternalHttpEndpoints();
 }
 
+// Angular with API proxy
+{
+  await builder.addViteApp('angular', './frameworks/angular', { runScriptName: 'dev' })
+    .publishAsStaticWebsite({ apiPath: '/api', apiTarget: api })
+    .withExternalHttpEndpoints();
+}
+
 // --- Node server frameworks: server-side fetch from API ---
 
 // Nuxt
@@ -90,6 +97,22 @@ const apiEndpoint = await api.getEndpoint('http');
 {
   await builder.addViteApp('remix', './frameworks/remix', { runScriptName: 'dev' })
     .publishAsNpmScript({ startScriptName: 'start', runScriptArguments: '-- --port "$PORT"' })
+    .withEnvironment('API_URL', apiEndpoint)
+    .withExternalHttpEndpoints();
+}
+
+// SolidStart (v2 alpha — h3 v2 + srvx has a Node URL parsing bug, not yet deployable)
+// {
+//   await builder.addViteApp('solid', './frameworks/solid', { runScriptName: 'dev' })
+//     .publishAsNodeServer('.output/server/index.mjs', { outputPath: '.output' })
+//     .withEnvironment('API_URL', apiEndpoint)
+//     .withExternalHttpEndpoints();
+// }
+
+// Qwik City
+{
+  await builder.addViteApp('qwik', './frameworks/qwik', { runScriptName: 'dev' })
+    .publishAsNpmScript({ startScriptName: 'start' })
     .withEnvironment('API_URL', apiEndpoint)
     .withExternalHttpEndpoints();
 }
