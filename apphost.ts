@@ -35,10 +35,10 @@ const apiEndpoint = await api.getEndpoint('http');
     .withExternalHttpEndpoints();
 }
 
-// Astro static (no weather fetch — MPA, no client JS by default)
+// Astro static with API proxy
 {
   await builder.addViteApp('astro', './frameworks/astro', { runScriptName: 'dev' })
-    .publishAsStaticWebsite()
+    .publishAsStaticWebsite({ apiPath: '/api', apiTarget: api })
     .withExternalHttpEndpoints();
 }
 

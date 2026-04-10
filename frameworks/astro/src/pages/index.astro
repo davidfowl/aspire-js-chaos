@@ -12,6 +12,27 @@
 		<title>Astro</title>
 	</head>
 	<body>
-		<h1>Astro</h1>
+		<h1>Astro Weather</h1>
+		<div id="weather">Loading...</div>
+		<script>
+			interface WeatherForecast {
+				date: string;
+				temperatureC: number;
+				summary: string;
+			}
+
+			const el = document.getElementById('weather')!;
+			try {
+				const res = await fetch('/api/weather');
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+				const data: WeatherForecast[] = await res.json();
+				el.innerHTML = `<table>
+					<thead><tr><th>Date</th><th>Temp (°C)</th><th>Summary</th></tr></thead>
+					<tbody>${data.map(w => `<tr><td>${w.date}</td><td>${w.temperatureC}</td><td>${w.summary}</td></tr>`).join('')}</tbody>
+				</table>`;
+			} catch (e) {
+				el.innerHTML = `<p style="color:red">Failed to load weather data: ${e}</p>`;
+			}
+		</script>
 	</body>
 </html>
