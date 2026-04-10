@@ -13,17 +13,18 @@ Aspire provides three built-in publish methods for JavaScript applications:
 
 | Method | Use when | Runtime image contains |
 |--------|----------|----------------------|
-| `PublishAsStaticWebsite` | Your app builds to static HTML/CSS/JS files | Caddy file server + `dist/` |
+| `PublishAsStaticWebsite` | Your app builds to static HTML/CSS/JS files | YARP reverse proxy + `dist/` |
 | `PublishAsNodeServer` | Your build produces a self-contained Node.js server | Node.js + built artifact only |
 | `PublishAsNpmScript` | Your server entry point imports packages from `node_modules` at runtime | Node.js + built output + production `node_modules` |
 
 ## Publish as static website
 
-Use `PublishAsStaticWebsite` for frameworks that compile to static files during `npm run build`. The resulting container serves the files using [Caddy](https://caddyserver.com), a lightweight HTTP server.
+Use `PublishAsStaticWebsite` for frameworks that compile to static files during `npm run build`. The resulting container serves the files using [YARP](https://github.com/microsoft/reverse-proxy), a .NET reverse proxy.
 
 This is the right choice for:
 
 - **Vite** apps (React, Vue, vanilla)
+- **Angular** apps
 - **Astro** in default static mode
 - Any SPA or static site generator that outputs to `dist/`
 
@@ -35,7 +36,7 @@ var frontend = builder.AddViteApp("frontend", "./frontend")
 ```
 
 ```typescript
-const frontend = builder
+const frontend = await builder
     .addViteApp('frontend', './frontend')
     .publishAsStaticWebsite();
 ```
@@ -47,7 +48,7 @@ Static sites that call a backend API face two deployment problems:
 1. **CORS** — the browser is on a different origin than the API
 2. **Backend URL discovery** — `VITE_*` variables are baked at build time, but the API URL isn't known until deploy time
 
-`PublishAsStaticWebsite` solves both by optionally adding a reverse proxy route to Caddy. Requests matching the path prefix are proxied to the backend — same origin, no CORS, no URL discovery needed:
+`PublishAsStaticWebsite` solves both by optionally adding a reverse proxy route to YARP. Requests matching the path prefix are proxied to the backend — same origin, no CORS, no URL discovery needed:
 
 ```csharp
 var api = builder.AddNodeApp("api", "./api", "server.js")
@@ -61,18 +62,19 @@ var frontend = builder.AddViteApp("frontend", "./frontend")
 ```
 
 ```typescript
-const api = builder.addNodeApp('api', './api', 'server.js')
+const api = await builder.addNodeApp('api', './api', 'server.js')
     .withHttpEndpoint({ port: 3001, env: 'PORT' });
 
-const frontend = builder
+const frontend = await builder
     .addViteApp('frontend', './frontend')
-    .publishAsStaticWebsite({ apiPath: '/api', apiTarget: await api.getEndpoint('http') })
+    .publishAsStaticWebsite({ apiPath: '/api', apiTarget: api })
     .withExternalHttpEndpoints();
 ```
 
-The browser calls `/api/hello` on the same origin. Caddy proxies it to the backend. No CORS configuration needed.
+The browser calls `/api/hello` on the same origin. YARP proxies it to the backend. No CORS configuration needed.
 
-For more complex routing (multiple backends, path transforms, auth, BFF patterns), use YARP with `PublishWithStaticFiles` instead. See [Deploy JavaScript apps](https://aspire.dev/deployment/javascript-apps/) for the full deployment models.
+> [!TIP]
+> In **dev mode**, Aspire injects the `API_HTTP` environment variable with the backend URL. Each framework needs its own dev proxy config to forward `/api` requests. For Vite-based apps, add `server.proxy` in `vite.config.ts` reading `process.env.API_HTTP`. For Angular, use a `proxy.conf.js` file reading `process.env.API_HTTP`.
 
 ### SPA fallback
 
@@ -113,12 +115,12 @@ builder.AddViteApp("tanstack-app", "./tanstack-app")
 
 ```typescript
 // SvelteKit
-builder
+await builder
     .addViteApp('svelte-app', './svelte-app')
     .publishAsNodeServer('build/index.js', { outputPath: 'build' });
 
 // TanStack Start
-builder
+await builder
     .addViteApp('tanstack-app', './tanstack-app')
     .publishAsNodeServer('.output/server/index.mjs', { outputPath: '.output' });
 ```
@@ -135,6 +137,7 @@ This is the right choice for:
 - **Nuxt** — `useAsyncData`/`useFetch` needs the full Nitro environment with `node_modules` at runtime. See the [Nuxt deployment docs](https://nuxt.com/docs/getting-started/deployment).
 - **Remix / React Router** — `react-router-serve` is an npm package, not a standalone binary. See the [official Dockerfile](https://github.com/remix-run/react-router-templates/tree/main/node-custom-server).
 - **Astro SSR** with [`@astrojs/node`](https://docs.astro.build/en/guides/integrations-guide/node/) — the built `entry.mjs` imports unbundled `@astrojs/*` packages. See the [official Docker recipe](https://docs.astro.build/en/recipes/docker/).
+- **Qwik City** — the server entry imports unbundled Qwik packages from `node_modules`.
 
 ### Usage
 
@@ -148,18 +151,27 @@ builder.AddViteApp("remix-app", "./remix-app")
     .PublishAsNpmScript(
         startScriptName: "start",
         runScriptArguments: "-- --port \"$PORT\"");
+
+// Qwik City
+builder.AddViteApp("qwik-app", "./qwik-app")
+    .PublishAsNpmScript(startScriptName: "start");
 ```
 
 ```typescript
 // Nuxt
-builder
+await builder
     .addViteApp('nuxt-app', './nuxt-app')
     .publishAsNpmScript({ startScriptName: 'start' });
 
 // Remix
-builder
+await builder
     .addViteApp('remix-app', './remix-app')
     .publishAsNpmScript({ startScriptName: 'start', runScriptArguments: '-- --port "$PORT"' });
+
+// Qwik City
+await builder
+    .addViteApp('qwik-app', './qwik-app')
+    .publishAsNpmScript({ startScriptName: 'start' });
 ```
 
 > [!NOTE]
@@ -216,8 +228,22 @@ These are issues discovered during real deployment validation — not in the fra
 
 ### Vite / React / Vue (static)
 
-- **Preview is not production**: Both [Vite](https://vite.dev/guide/cli.html#vite-preview) and framework docs explicitly state that `vite preview` is not a production server. Always use `PublishAsStaticWebsite` with Caddy.
-- **API calls**: Use the `apiPath`/`apiTarget` option on `PublishAsStaticWebsite` to proxy API calls through Caddy. Do not use `VITE_*` env vars for runtime API URLs — they are baked at build time.
+- **Preview is not production**: Both [Vite](https://vite.dev/guide/cli.html#vite-preview) and framework docs explicitly state that `vite preview` is not a production server. Always use `PublishAsStaticWebsite`.
+- **API calls**: Use the `apiPath`/`apiTarget` option on `PublishAsStaticWebsite` to proxy API calls through YARP. Do not use `VITE_*` env vars for runtime API URLs — they are baked at build time.
+- **Dev proxy**: Add `server.proxy` in `vite.config.ts` reading `process.env.API_HTTP` for dev mode API forwarding.
+
+### Angular
+
+- **Vite-based**: Angular 17+ uses Vite internally via `@angular/build`. `addViteApp` works — Aspire correctly injects `--port` into `ng serve`.
+- **Dev proxy**: Angular doesn't expose `vite.config.ts` directly. Use a `proxy.conf.js` file (not `.json`) that reads `process.env.API_HTTP`, referenced in `angular.json` under `serve.options.proxyConfig`.
+- **Output path**: Set `outputPath` in `angular.json` to `{ "base": "dist", "browser": "" }` so the build output lands directly in `dist/` for `PublishAsStaticWebsite`.
+
+### Qwik City
+
+- **Node version**: Qwik uses Vite 7 which requires Node 20+. Set `engines` in `package.json` to `"node": "^20.19.0 || ^22.13.0 || >=24"`.
+- **Server adapter**: Requires a Node server adapter. Create `adaptors/node-server/vite.config.ts` with `nodeServerAdapter()` and a corresponding `src/entry.node-server.tsx`.
+- **Build steps**: Requires both `npm run build.client` and `npm run build.server`. The default `npm run build` runs both via `qwik build`.
+- **SSR data loading**: Use `routeLoader$` for server-side data fetching. Access the backend URL via `process.env['API_URL']`.
 
 ## How to choose the right method
 
@@ -237,14 +263,16 @@ These are issues discovered during real deployment validation — not in the fra
 
 | Framework | Method | Entry point | Config required |
 |-----------|--------|-------------|-----------------|
-| Vite / React / Vue | `PublishAsStaticWebsite` | N/A (Caddy) | None |
-| Astro (static) | `PublishAsStaticWebsite` | N/A (Caddy) | None |
+| Vite / React / Vue | `PublishAsStaticWebsite` | N/A (YARP) | None |
+| Angular | `PublishAsStaticWebsite` | N/A (YARP) | `outputPath` in `angular.json` |
+| Astro (static) | `PublishAsStaticWebsite` | N/A (YARP) | None |
 | SvelteKit | `PublishAsNodeServer` | `build/index.js` | `@sveltejs/adapter-node` |
 | TanStack Start | `PublishAsNodeServer` | `.output/server/index.mjs` | None |
 | Next.js | `PublishAsNodeServer` | `server.js` | `output: "standalone"` |
 | Nuxt | `PublishAsNpmScript` | `node .output/server/index.mjs` | `NUXT_` env prefix |
 | Astro SSR | `PublishAsNpmScript` | `node ./dist/server/entry.mjs` | `@astrojs/node`, `prerender: false` |
 | Remix | `PublishAsNpmScript` | `react-router-serve` | None |
+| Qwik City | `PublishAsNpmScript` | `node server/entry.node-server.js` | Node server adapter |
 
 ## Relationship to existing deployment models
 
